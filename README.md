@@ -13,16 +13,37 @@ Table of Contents
       * [Create and connect to an EC2 box](#create-and-connect-to-an-ec2-box)
       * [Install RStudio Server on EC2](#install-rstudio-server-on-ec2)
       * [Connect to the RStudio Server](#connect-to-the-rstudio-server)
-      * [Set up an easy to remember domain name](#set-up-an-easy-to-remember-domain-name)
       * [Play with R for a bit](#play-with-r-for-a-bit)
       * [Prepare to schedule R commands](#prepare-to-schedule-r-commands)
       * [Schedule R commands](#schedule-r-commands)
-      * [Schedule R scripts](#schedule-r-scripts)
-      * [ScheduleR improvements](#scheduler-improvements)
       * [Homework](#homework)
    * [Week 2: Scaling R applications](#week-2-scaling-r-applications)
-   * [Week 3: Stream processing with R](#week-3-stream-processing-with-r)
-   * [Contact](#contact)
+      * [Recap](#recap)
+      * [Preparations](#preparations)
+      * [Set up an easy to remember IP address](#-set-up-an-easy-to-remember-ip-address)
+      * [Set up an easy to remember domain name](#-set-up-an-easy-to-remember-domain-name)
+      * [ScheduleR improvements](#-scheduler-improvements)
+      * [Schedule R scripts](#schedule-r-scripts)
+      * [Intro to redis](#intro-to-redis)
+      * [Interacting with Slack](#interacting-with-slack)
+         * [Using Slack from Jenkins](#using-slack-from-jenkins)
+         * [Note on storing the Slack token](#note-on-storing-the-slack-token)
+         * [Using Slack from R](#using-slack-from-r)
+      * [Better handling of secrets and credentials](#better-handling-of-secrets-and-credentials)
+      * [Job Scheduler exercises](#job-scheduler-exercises)
+  * [Week 3: Stream processing with R](#week-3-stream-processing-with-r)
+      * [Recap](#recap-1)
+      * [Quiz](#quiz-1)
+      * [Background: Example use-case and why to use R to do stream processing?](#background-example-use-case-and-why-to-use-r-to-do-stream-processing)
+      * [Preparations](#preparations-1)
+      * [Configuring for standard ports](#-configuring-for-standard-ports)
+      * [Setting up a demo stream](#-setting-up-a-demo-stream)
+      * [A simple stream consumer app in R](#a-simple-stream-consumer-app-in-r)
+      * [Parsing and structuring records read from the stream](#parsing-and-structuring-records-read-from-the-stream)
+      * [Stream processor daemon](#stream-processor-daemon)
+      * [Shiny app showing the progress](#shiny-app-showing-the-progress)
+      * [Dockerizing R scripts](#dockerizing-r-scripts)
+  * [Contact](#contact)
 
 ## Schedule
 
@@ -34,7 +55,41 @@ Table of Contents
 
 The goal of this assignment is to confirm that the students have a general understanding on how to build data pipelines using Amazon Web Services and R, and can actually implement a stream processing application (either running in almost real-time or batched/scheduled way) in practice.
 
-Details to be shared later.
+### Tech setup
+
+To minimize the system administration and most of the engineering tasks for the students, the below pre-configured tools are provided as free options, but students can decide to build their own environment (on the top of or independently from these) and feel free to use any other tools:
+
+* `CEU-Binance` stream in the Ireland region of the central CEU AWS account with the real-time order data from the Binance cryptocurrency exchange on Bitcoin (BTC), Ethereum (ETH), Litecoin (LTC), Neo (NEO), Binance Coin (BNB) and Tether (USDT) -- including the the attributes of each transaction as specified at https://github.com/binance-exchange/binance-official-api-docs/blob/master/web-socket-streams.md#trade-streams
+* `de4-week2` Amazon Machine Image that you can use to spin up an EC2 node with RStudio Server, Shiny Server, Jenkins, Redis and Docker installed & pre-configured (use the “ceu” username and “ceudata” password if asked for all services) along with the most often used R packages (including the ones we used for stream processing, eg `botor`, `AWR.Kinesis` and the `binancer` package)
+* `gergely-week2` EC2 IAM role with full access to Kinesis, Dynamodb, Cloudwatch and encrypt/decrypt access to the "all-the-keys" KMS key
+* `de4` KMS key that you can use to decrypt the below string to get a Slack access token for the `ceu-data-bot` user: `AQICAHhh7Ku/BWdSbCqos9k49Vnk1+WytvoesgX+1bOvLAlyegHa210D93pgytNnThR9qVVxAAAAmjCBlwYJKoZIhvcNAQcGoIGJMIGGAgEAMIGABgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDKkH9le72xKmMsgjTQIBEIBT/7MbIV2sG6Hh+fb8BJQ9a6VNOZ1rhPAgvSET6IUdiki92fMZ6dDBOpmSSuaa3t8KIF9KtrlbQAYQNtPVHUvFl1GpyM0k8bD7jLSsUPeRjFNoI+Q=`
+* lecture and seminar notes at https://github.com/daroczig/CEU-R-prod
+
+### Required output
+
+Make sure to clean-up your EC2 nodes, security groups, keys etc created in the past weeks, as left-over AWS resources [will contribute negative points to your final grade](#preparations-1)!
+
+* Minimal project (for grade up to "B"): schedule a Jenkins job that runs every hour and reads 250 messages from the "CEU-Binance" stream. Use this batch of data to
+
+    * Draw a barplot on the overall number of units per symbol in the "#bots-final-project" Slack channel based on the number of transactions returned from the Kinesis stream
+    * Get the current symbol prices from the Binance API, and compute the overall price of the 250 transactions in USD and print to the console
+    
+* Suggested project (for grade up to "A"): Create a stream processing application using the `AWR.Kinesis` R package's daemon + Redis (similar to what we did on the 3rd week) to record the overall amount of coins exchanged on Binance (per symbol) in the most recent micro-batch (in other words, whatever records the Java daemon reports, sum up amount by symbol and store in Redis). No need to clear the cache ... so if a symbol was not included in a batch, don't update those keys in Redis. Create a Jenkins job that reads from this Redis cache and prints the overall value (in USD) of the transactions -- based on the coin prices reported by the Binance API at the time of request. Create at least two more additional charts that display a metric you find meaningful, and report in the "#bots-final-project" Slack channel.
+
+### Delivery method
+
+* Create a PDF document that describes your solution and all the main steps involved with low level details: attach screenshots (includeing the URL nav bar and the date/time widget of your OS, so like full-screen and not area-picked screenshots) of your browser showing what you are doing in RStudio Server or eg Jenkins, make sure that the code you wrote is either visible on the screenshots, or included in the PDF. The minimal amount of screenshots are: EC2 creation, R code shown in your RStudio Server, Jenkins job config page, Jenkins job output, Slack channel notifications.
+* STOP the EC2 Instance you worked on, but don’t terminate it, so we can start it and check how it works. Note that your instance will be terminated by us after the end of the class.
+* Include the `instance_id` on the first page of the PDF, along with your name or student id.
+* Upload the PDF to Moodle.
+
+### Submission deadline
+
+Midnight (CET) on April 19, 2019
+
+### Getting help
+
+Contact Mihaly Orsos (TA) on the `ceu-bizanalytics` Slack or at OrsosM@ceu.edu
 
 ## Week 1: Using R in the Cloud
 
@@ -109,7 +164,7 @@ Details to be shared later.
     1. Go the the Instances overview at https://eu-west-1.console.aws.amazon.com/ec2/v2/home?region=eu-west-1#Instances:sort=instanceId
     2. Click "Launch Instance"
     3. Pick the `Ubuntu Server 18.04 LTS (HVM), SSD Volume Type` AMI
-    4. Pick `t2.micro` instance type (see more [instance types](https://aws.amazon.com/ec2/instance-types))
+    4. Pick `t3.micro` instance type (see more [instance types](https://aws.amazon.com/ec2/instance-types))
     5. Click "Review and Launch"
     6. Pick a unique name for the security group after clicking "Edit Security Group"
     7. Click "Launch"
@@ -129,6 +184,13 @@ Details to be shared later.
     4. Save the Session profile
     5. Click the "Open" button
     6. Accept & cache server's host key
+
+Alternatively, you can connect via a standard SSH client on a Mac or Linux, something like:
+
+```sh
+chmod 0400 /path/to/your/pem
+ssh -i /path/to/your/pem -p 8000 ubuntu@ip-address-of-your-machine
+```
 
 ### Install RStudio Server on EC2
 
@@ -244,16 +306,6 @@ Although also note (3) the related security risks.
 
 9. Custom login page: http://docs.rstudio.com/ide/server-pro/authenticating-users.html#customizing-the-sign-in-page
 10. Custom port: http://docs.rstudio.com/ide/server-pro/access-and-security.html#network-port-and-address
-
-### Set up an easy to remember domain name
-
-1. Go to Route 53: https://console.aws.amazon.com/route53/home
-2. Go to Hosted Zones and click on `ceudata.net`
-3. Create a new Record, where
-
-    - fill in the desired `Name` (subdomain)
-    - paste the public IP address or hostname of your server in the `Value` field
-    - click `Create`
 
 ### Play with R for a bit
 
@@ -451,32 +503,102 @@ Let's schedule a Jenkins job to check on the Bitcoin prices every hour!
 
     ![](https://raw.githubusercontent.com/daroczig/CEU-R-prod/2018-2019/images/jenkins-success.png)
 
-### Schedule R scripts
+### Homework
 
-1. Create an R script with the below content and save on the server, eg as `/home/ceu/bitcoin-price.R`:
+Read the [rOpenSci Docker tutorial](https://ropenscilabs.github.io/r-docker-tutorial/) -- quiz next week! Think about why we might want to use Docker.
 
-    ```r
-    library(binancer)
-    prices <- binance_coins_prices()
-    sprintf('The current Bitcoin price is: %s', prices[symbol == 'BTC', usd])
-    ```
-        
-2. Instead of calling `R -e "..."` in the Jenkins jobs, reference the above R script using `Rscript` instead
+## Week 2: Scaling R applications
 
-### ScheduleR improvements
+> Hello folks, we'll start at 15:30.
+
+### Intro to the online version of this class
+
+* I highly recommended to get a second screen for your laptop: it can be a monitor attached to your laptop, or the TV in your living room connected via HDMI cable to your laptop, or if you have a spare tablet or laptop that you can use -- all should work fine. The goal is to have a dedicated screen for the video-conferencing, so that you can follow the stream (and ask questions), and have your usual laptop screen to do the exercises etc
+* It's much better to use a headphone (compared to using the laptop speakers and microphone) so that you hear better all the others and also the others can better understand you
+* Please click on the "mute" button on your end when not asking questions to reduce background noise
+* Please DO feel free to ask questions and interact with the course at any time -- doing the class remotely doesn't mean you are just watching a video! Please raise your voice if something is not clear, and follow the exercises to make the most out of this unfortunate situation.
+
+Quick intro to Google Hangouts / Meet:
+
+* mute/unmute
+* enable/disable camera (save bandwith and CPU cycles)
+* share your screen or a window
+* chat sidebar
+* alternative way of reaching me: email, slack, moodle
+
+### Recap
+
+What we convered last week:
+
+1. 2FA/MFA in AWS
+2. Creating EC2 nodes
+3. Connecting to EC2 nodes via SSH/Putty (note the difference between the PPK and PEM key formats)
+4. Updating security groups
+5. Installing RStudio Server
+6. The difference between R Console and Shell
+7. Adding new Linux users
+8. Granting `sudo` access to Linux users
+9. Installing R packages system-wide VS in the user's home folder
+10. Installing and setting up Jenkins
+11. Debugging issues, eg small instance with limited memory for compiling packages from source and user permissions
+
+Note the above detailed steps for the above!
+
+Also, in the below steps, you can skip running all the instructions prefixed with 💪 -- as the Amazon AMI has already configured so for your convenience, and these steps are just here as an FYI if you want to reproduce the same environment later (eg for a hobby project or work).
+
+### Quiz
+
+Please fill in the form at https://goo.gl/forms/oKQ0zILuQljgBxyH3
+
+### Preparations
+
+1. Log in to the central CEU AWS account: https://ceu.signin.aws.amazon.com/console
+2. Did you use 2FA / MFA?!
+3. Use the Ireland regiuon
+4. Go to the EC2 console at https://eu-west-1.console.aws.amazon.com/ec2/v2/home?region=eu-west-1#Instances:sort=instanceId
+5. Realize the mess we left there from last week! 😱 Fix it. Kill your old security groups as well. Remove unneded keys.
+6. 💪 Check on the wasted money in the AWS Cost Explorer
+7. Create a new `t3.micro` instance using the `de4-week2` AMI and `t3.small` instance size using a new security group with a unique name and opening up the 22 (ssh), 8000 (alternate ssh), 8787 (rstudio) and 8080 (jenkins) ports
+8. Log in to RStudio using the new instance's public IP address and 8787 port, then the `ceu` username and `ceudata` password
+9. Check if the price of a Bitcoin is more than $4,000 (feel free to scroll up to get some hints from last week's R scripts)
+
+### 💪 Set up an easy to remember IP address
+
+Optionally you can associate a fixed IP address to your box:
+
+1. Allocate a new Elastic IP address at https://eu-west-1.console.aws.amazon.com/ec2/v2/home?region=eu-west-1#Addresses:
+2. Name this resource by assigning a "Name" tag
+3. Associate this Elastic IP with your stopped box, then start it
+
+### 💪 Set up an easy to remember domain name
+
+Optionally you can associate a subdomain with your node, using the above created Elastic IP address:
+
+1. Go to Route 53: https://console.aws.amazon.com/route53/home
+2. Go to Hosted Zones and click on `ceudata.net`
+3. Create a new Record, where
+
+    - fill in the desired `Name` (subdomain)
+    - paste the public IP address or hostname of your server in the `Value` field
+    - click `Create`
+
+4. Now you will be able to access your box using this custon (sub)domain, no need to remember IP addresses.
+
+### 💪 ScheduleR improvements
 
 1. Learn about little R: https://github.com/eddelbuettel/littler
-2. Set up e-mail notifications via SNS: https://eu-west-1.console.aws.amazon.com/ses/home?region=eu-west-1#
+2. Set up e-mail notifications via eg mailjet.com
 
-    1. Whitelist and confirm your e-mail address at https://eu-west-1.console.aws.amazon.com/ses/home?region=eu-west-1#verified-senders-email:
-    2. Take a note on the SMTP settings:
+    1. Sign up, confirm your e-mail address and domain
+    2. Take a note on the SMTP settings, eg
 
-        * Server: email-smtp.eu-west-1.amazonaws.com
-        * Port: 587
-        * TLS: Yes
+        * SMTP server: in-v3.mailjet.com
+        * Port: 465
+        * SSL: Yes
+        * Username: ***
+        * Password: ***
 
-    3. Create SMTP credentials and note the username and password
-    4. Configure Jenkins at http://SERVERNAME.ceudata.net:8080/configure
+    3. Configure Jenkins at http://SERVERNAME.ceudata.net:8080/configure
 
         1. Set up the default FROM e-mail address: jenkins@ceudata.net
         2. Search for "Extended E-mail Notification" and configure
@@ -487,23 +609,824 @@ Let's schedule a Jenkins job to check on the Bitcoin prices every hour!
            * Enter User Name from the above steps from SNS
            * Enter Password from the above steps from SNS
            * Check "Use SSL"
-           * SMTP port: 587
+           * SMTP port: 465
 
     5. Set up "Post-build Actions" in Jenkins: Editable Email Notification - read the manual and info popups, configure to get an e-mail on job failures and fixes
+    6. Configure the job to send the whole e-mail body as the deault body template for all outgoing emails
+
+    ```shell
+    ${BUILD_LOG, maxLines=1000}
+    ```
 
 3. Look at other Jenkins plugins, eg the Slack Notifier: https://plugins.jenkins.io/slack
 
-### Homework
+### Schedule R scripts
 
-Read the [rOpenSci Docker tutorial](https://ropenscilabs.github.io/r-docker-tutorial/) -- quiz next week! Think about why we might want to use Docker.
+1. Create an R script with the below content and save on the server, eg as `/home/ceu/bitcoin-price.R`:
 
-## Week 2: Scaling R applications
+    ```r
+    library(binancer)
+    prices <- binance_coins_prices()
+    sprintf('The current Bitcoin price is: %s', prices[symbol == 'BTC', usd])
+    ```
+        
+2. Follow the steps from the [Schedule R commands](#schedule-r-commands) section to create a new Jenkins job, but instead of calling `R -e "..."` in shell step, reference the above R script using `Rscript` instead
 
-To be uploaded.
+```shell
+Rscript /home/ceu/de4.R
+```
+
+### Intro to redis
+
+We need a persistent storage for our Jenkins jobs ... let's give a try to a key-value database:
+
+1. 💪 Install server
+
+   ```
+   sudo apt install redis-server
+   netstat -tapen | grep LIST
+   ```
+
+2. 💪 Install client
+
+    ```
+    sudo Rscript -e "withr::with_libpaths(new = '/usr/local/lib/R/site-library', install.packages('rredis', repos='https://cran.rstudio.com/'))"
+    ```
+
+3. Interact from R
+
+    ```r
+    ## set up and initialize the connection to the local redis server
+    library(rredis)
+    redisConnect()
+    
+    ## set/get values
+    redisSet('foo', 'bar')
+    redisGet('foo')
+    
+    ## increment and decrease counters
+    redisIncr('counter')
+    redisIncr('counter')
+    redisIncr('counter')
+    redisGet('counter')
+    redisDecr('counter')
+    redisDecr('counter2')
+    
+    ## get multiple values at once
+    redisMGet(c('counter', 'counter2'))
+    ```
+
+For more examples and ideas, see the [`rredis` package vignette](https://cran.r-project.org/web/packages/rredis/vignettes/rredis.pdf) or try the interactive, genaral (not R-specific) [redis tutorial](https://try.redis.io).
+
+4. Exercises
+
+    - Create a Jenkins job running every minute to cache the most recent Bitcoin and Ethereum prices in Redis
+    - Write an R script in RStudio that can read the Bitcoin and Ethereum prices from the Redis cache
+
+<details><summary>Example solution ...</summary>
+
+```r
+library(rredis)
+redisConnect()
+
+redisSet('price:BTC', binance_klines('BTCUSDT', interval = '1m', limit = 1)$close)
+redisSet('price:ETH', binance_klines('ETHUSDT', interval = '1m', limit = 1)$close)
+
+redisGet('price:BTC')
+redisGet('price:ETH')
+
+redisMGet(c('price:BTC', 'price:ETH'))
+```
+</details>
+
+<details><summary>Example solution using a helper function doing some logging ...</summary>
+
+```r
+store <- function(symbol) {
+  print(paste('Looking up and storing', symbol))
+  redisSet(paste('price', symbol, sep = ':'), 
+           binance_klines(paste0(symbol, 'USDT'), interval = '1m', limit = 1)$close)
+}
+
+store('BTC')
+store('ETH')
+
+## list all keys with the "price" prefix and lookup the actual values
+redisMGet(redisKeys('price:*'))
+```
+</details>
+
+More on databases at the "Mastering R" class in the Spring semester ;)
+
+### Interacting with Slack
+
+1. Join the #ba-de4-2019-bots channel in the `ceu-bizanalytics` Slack
+2. 💪 A custom Slack app is already created at https://api.slack.com/apps/A9FBHCLPR, but feel free to create a new one and use the related app in the following steps
+3. Look up the app's bots in the sidebar
+4. Look up the Access Token
+
+#### Using Slack from Jenkins
+
+1. Get familiar with the Slack Notifier Jenkins plugin: https://plugins.jenkins.io/slack
+2. Configure global Slack options (what about storing the token?)
+3. Set up post-hook actions to alert in Slack if a Jenkins job is failing
+
+#### Talk: Productionizing R in the Cloud
+
+Slides at http://bit.ly/satrday-la-2018-daroczig
+
+#### Note on storing the Slack token
+
+1. Do not store the token in plain-text!
+2. Let's use Amazon's Key Management Service: https://github.com/daroczig/CEU-R-prod/raw/2017-2018/AWR.Kinesis/AWR.Kinesis-talk.pdf (slides 73-75)
+3. 💪 Instead of using the Java SDK, let's install `boto3` Python module and use via `reticulate`:
+
+    ```shell
+    sudo apt install python4-pip
+    sudo pip3 install boto3
+    sudo Rscript -e "withr::with_libpaths(new = '/usr/local/lib/R/site-library', install.packages('reticulate', repos='https://cran.rstudio.com/'))"
+    sudo Rscript -e "library(devtools);withr::with_libpaths(new = '/usr/local/lib/R/site-library', install_github('daroczig/botor', upgrade_dependencies = FALSE))"
+    ```
+
+4. 💪 Create a KMS key in IAM: `alias/de4`
+5. Grant access to that KMS key by creating an EC2 IAM role at https://console.aws.amazon.com/iam/home?region=eu-west-1#/roles with the `AWSKeyManagementServicePowerUser` policy and explicit grant access to the key in the KMS console
+6. Attach the newly created IAM role
+7. Use this KMS key to encrypt the Slack token:
+
+    ```r
+    library(botor)
+    botor(region = 'eu-west-1')
+    kms_encrypt('token', key = 'alias/de4')
+    ```
+
+8. Store the ciphertext and use `kms_decrypt` to decrypt later, see eg 
+
+    ```r
+    kms_decrypt("AQICAHhh7Ku/BWdSbCqos9k49Vnk1+WytvoesgX+1bOvLAlyegHa210D93pgytNnThR9qVVxAAAAmjCBlwYJKoZIhvcNAQcGoIGJMIGGAgEAMIGABgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDKkH9le72xKmMsgjTQIBEIBT/7MbIV2sG6Hh+fb8BJQ9a6VNOZ1rhPAgvSET6IUdiki92fMZ6dDBOpmSSuaa3t8KIF9KtrlbQAYQNtPVHUvFl1GpyM0k8bD7jLSsUPeRjFNoI+Q=")
+    ```
+
+#### Using Slack from R
+
+4. 💪 Install the Slack R client
+
+    ```shell
+    sudo apt install r-cran-rlang r-cran-purrr r-cran-tibble r-cran-dplyr
+    sudo R -e "withr::with_libpaths(new = '/usr/local/lib/R/site-library', install.packages('slackr', repos='https://cran.rstudio.com/'))"
+    ```
+
+5. Init and send our first messages with `slackr`
+
+    ```r
+    library(botor)
+    token <- kms_decrypt("AQICAHhh7Ku/BWdSbCqos9k49Vnk1+WytvoesgX+1bOvLAlyegHa210D93pgytNnThR9qVVxAAAAmjCBlwYJKoZIhvcNAQcGoIGJMIGGAgEAMIGABgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDKkH9le72xKmMsgjTQIBEIBT/7MbIV2sG6Hh+fb8BJQ9a6VNOZ1rhPAgvSET6IUdiki92fMZ6dDBOpmSSuaa3t8KIF9KtrlbQAYQNtPVHUvFl1GpyM0k8bD7jLSsUPeRjFNoI+Q=")
+    library(slackr)
+    slackr_setup(username = 'jenkins', api_token = token, icon_emoji = ':jenkins-rage:')
+    text_slackr(text = 'Hi there!', channel = '#ba-de4-2019-bots')
+    ```
+
+6. A more complex message
+
+    ```r
+    library(binancer)
+    prices <- binance_coins_prices()
+    msg <- sprintf(':money_with_wings: The current Bitcoin price is: $%s', prices[symbol == 'BTC', usd])
+    text_slackr(text = msg, preformatted = FALSE, channel = '#ba-de4-2019-bots')
+    ```
+
+7. Or plot
+
+    ```r
+    library(ggplot2)
+    klines <- binance_klines('BTCUSDT', interval = '1m', limit = 60*3)
+    p <- ggplot(klines, aes(close_time, close)) + geom_line()
+    ggslackr(plot = p, channels = '#ba-de4-2019-bots', width = 12)
+    ```
+
+### Better handling of secrets and credentials
+
+Besides KMS, there are a few other great options as well, see eg the System Manager's Parameter Store at https://eu-west-1.console.aws.amazon.com/systems-manager/parameters/?region=eu-west-1 (which will need you to grant access to SSM for the related IAM role, eg via attaching the `AmazonSSMReadOnlyAccess` policy):
+
+```r
+ssm_get_parameter('slack')
+```
+
+We will also cover this in more details in the Mastering R class in the Spring semester.
+
+### Job Scheduler exercises
+
+* Create a Jenkins job to alert if Bitcoin price is below $3.8K or higher than $4K
+* Create a Jenkins job to alert if Bitcoin price changed more than $200 in the past hour
+* Create a Jenkins job to alert if Bitcoin price changed more than 5% in the past day
+* Create a Jenkins job running hourly to generate a candlestick chart on the price of BTC and ETH
+
+<details><summary>Example solution for the first exercise ...</summary>
+
+```r
+## get data right from the Binance API
+library(binancer)
+btc <- binance_klines('BTCUSDT', interval = '1m', limit = 1)$close
+
+## or from the local cache (updated every minute from Jenkins as per above)
+library(rredis)
+btc <- redisGet('price:BTC')
+
+## log whatever was retreived
+library(logger)
+log_info('The current price of a Bitcoin is ${btc}')
+
+## send alert
+if (btc < 3800 | btc > 4000) {
+  library(botor)
+  token <- ssm_get_parameter('slack')
+  library(slackr)
+  slackr_setup(username = 'jenkins', api_token = token, icon_emoji = ':jenkins-rage:')
+  text_slackr(
+    text = paste('uh ... oh... BTC price:', btc), 
+    channel = '#ba-de4-2019-bots')
+}
+```
+</details>
 
 ## Week 3: Stream processing with R
 
-To be uploaded.
+### Recap
+
+What we convered last week:
+
+1. AWS resurce cleanup
+2. New EC2 node using a custom AMI
+3. Concept of Elastic IP
+4. Using domain names
+5. Scheduling Jenkins jobs
+6. Introduction to Redis
+7. Interacting with Slack from R and Jenkins jobs
+8. Securely handle credentials in R
+
+You can skip running all the below instructions prefixed with 💪 -- as the Amazon AMI has already configured so for your convenience, and these steps are just here as an FYI if you want to reproduce the same environment later (eg for a hobby project or work).
+
+### Quiz
+
+Instead of doing a quiz this week ... you get all the 10% for rather providing some (anonymous) [feedback](#feedback) on this course at the end of the class today.
+
+
+### Background: Example use-case and why to use R to do stream processing? 
+
+https://github.com/daroczig/CEU-R-prod/raw/2017-2018/AWR.Kinesis/AWR.Kinesis-talk.pdf (presented at the Big Data Day Los Angeles 2016, EARL 2016 London and useR! 2017 Brussels)
+
+### Preparations
+
+1. Log in to the central CEU AWS account: https://ceu.signin.aws.amazon.com/console
+2. Did you use 2FA / MFA?!
+3. Use the Ireland regiuon
+4. Go to the EC2 console
+5. Realize the mess we left there from last week! 😱 Fix it. Kill your old security groups as well. Remove unneded keys. **Left over AWS resources (created before March 24) will contribute negative points to the final grade of the student starting the AWS instance etc!**
+6. Create a new `t3.small` instance using the `de4-week3` AMI, the `gergely-week2` IAM role, and a new security group with a unique name and opening up the 22 (ssh), 8000 (alternate ssh), 8787 (rstudio) and 8080 (jenkins) ports
+7. Log in to RStudio using the new instance's public IP address and 8787 port (or skip using the port and go with the `/rstudio` path as per below), then the `ceu` username and `ceudata` password
+8. Create and run *once* an R script in RStudio Server that reports in the #ba-de4-2019-bots channel that you are ready
+
+### 💪 Configuring for standard ports
+
+To avoid using ports like `8787` and `8080`, let's configure our services to listen on the standard 80 (HTTP) and potentially on the 443 (HTTPS) port as well, and serve RStudio on the `/rstudio`, and Jenkins on the `/jenkins` path.
+
+For this end, we will use Nginx as a reverse-proxy, so let's install it first:
+
+```shell
+sudo apt install -y nginx
+```
+
+Then we need to edit the main site's configuration at `/etc/nginx/sites-enabled/default` to act as a proxy, which also do some transformations, eg rewriting the URL (removing the `/rstudio` path) before hitting RStudio Server:
+
+```
+server {
+    listen 80;
+    rewrite ^/rstudio$ $scheme://$http_host/rstudio/ permanent;
+    location ^~ /rstudio {
+        rewrite ^/rstudio/(.*)$ /$1 break;
+        proxy_pass http://127.0.0.1:8787/$1;
+        proxy_redirect http://127.0.0.1:8787/ $scheme://$http_host/rstudio/;
+        proxy_set_header X-Real-IP  $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+And restart Nginx:
+
+```shell
+sudo systemctl restart nginx
+```
+
+Let's see if the port is open on the machine:
+
+```shell
+sudo netstat -tapen|grep LIST
+```
+
+Let's see if we can access RStudio Server on the new path:
+
+```shell
+curl localhost/rstudio
+```
+
+Now let's see from the outside world ... and realize that we need to open up port 80!
+
+Now we need to tweak the config to support Jenkins as well, but the above Nginx rewrite hack will not work, so we will just make it a standard reverse-proxy, eg:
+
+```
+server {
+    listen 80;
+    rewrite ^/rstudio$ $scheme://$http_host/rstudio/ permanent;
+    location ^~ /rstudio {
+        rewrite ^/rstudio/(.*)$ /$1 break;
+        proxy_pass http://127.0.0.1:8787/$1;
+        proxy_redirect http://127.0.0.1:8787/ $scheme://$http_host/rstudio/;
+        proxy_set_header X-Real-IP  $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Host $host;
+    }
+    location ^~ /jenkins/ {
+        proxy_pass http://127.0.0.1:8080/jenkins/;
+        proxy_set_header X-Real-IP  $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+And we also need to let Jenkins also know about the custom path, so edit the `JENKINS_ARGS` config in `/etc/default/jenkins` by adding:
+
+```shell
+--prefix=/jenkins
+```
+
+Then restart Jenkins, and good to go!
+
+### 💪 Setting up a demo stream
+
+This section describes how to set up a Kinesis stream with 5 shards on the live Binance transactions read from its websocket -- running in a Docker container, then feeding the JSON lines to Kinesis via the Amazon Kinesis Agent.
+
+1. Start a `t2.micro` instance running "Amazon Linux AMI 2018.03.0" (where it's easier to install the Kinesis Agent compared to using eg Ubuntu) with a known key. Make sure to set a name and enable termination protection (in the instance details)! Use SSH, Putty or eg the browser-based SSH connection.
+
+2. Install Docker (note that we are not on Ubuntu today, but using Red Hat's `yum` package manager):
+
+    ```
+    sudo yum install docker
+    sudo service docker start
+    sudo service docker status
+    ```
+
+3. Let's use a small Python app relying on the Binance API to fetch live transactions and store in a local file: 
+
+    * sources: https://github.com/daroczig/ceu-de3-docker-binance-streamer
+    * docker: https://cloud.docker.com/repository/registry-1.docker.io/daroczig/ceu-de3-docker-binance-streamer
+
+    Usage:
+
+    ```
+    screen -RRd streamer
+    sudo docker run -ti --rm  daroczig/ceu-de3-docker-binance-streamer > /tmp/transactions.json
+    ## "C-a c" to create a new screen, then you can switch with C-a "
+    ls -latr /tmp
+    tail -f /tmp/transactions.json
+    ```
+
+4. Install the Kinesis Agent:
+
+    As per https://docs.aws.amazon.com/firehose/latest/dev/writing-with-agents.html#download-install:
+    
+    ```
+    sudo yum install -y aws-kinesis-agent
+    ```
+
+5. Create a new Kinesis Stream (called `crypto`) at https://eu-west-1.console.aws.amazon.com/kinesis
+
+6. Configure the Kinesis Agent:
+
+    ```
+    sudo yum install mc
+    sudo mcedit /etc/aws-kinesis/agent.json
+    ```
+    
+    Running the above commands, edit the config file to update the Kinesis endpoint, the name of the stream on the local file path:
+    
+    ```
+    {
+      "cloudwatch.emitMetrics": true,
+      "kinesis.endpoint": "https://kinesis.eu-west-1.amazonaws.com",
+      "firehose.endpoint": "",
+
+      "flows": [
+        {
+          "filePattern": "/tmp/transactions.json",
+          "kinesisStream": "crypto",
+          "partitionKeyOption": "RANDOM"
+        }
+      ]
+    }
+    ```
+
+7. Restart the Agent:
+
+    ```
+    sudo service aws-kinesis-agent start
+    ```
+    
+8. Check the status and logs:
+
+    ```
+    sudo service aws-kinesis-agent status
+    sudo journalctl -xe
+    ls -latr /var/log/aws-kinesis-agent/aws-kinesis-agent.log
+    tail -f /var/log/aws-kinesis-agent/aws-kinesis-agent.log
+    ```
+
+9. Make sure that the IAM role can write to Kinesis and Cloudwatch, eg by attaching the `AmazonKinesisFullAccess` policy, then restart the agent
+
+    ```
+    sudo service aws-kinesis-agent restart
+    ```
+
+10. Check the AWS console's monitor if all looks good there as well
+11. Note for the need of permissions to `cloudwatch:PutMetricData`
+
+### A simple stream consumer app in R
+
+As the `botor` package was already installed, we can rely on the power of `boto3` to interact with the Kinesis stream. The IAM role attached to the node already has the `AmazonKinesisFullAccess` policy attached, so we have permissions to read from the stream.
+
+First we need to create a shard iterator, then using that, we can read the actual records from the shard:
+
+```r
+library(botor)
+botor(region = 'eu-west-1')
+shard_iterator <- kinesis_get_shard_iterator('crypto', '0')
+records <- kinesis_get_records(shard_iterator$ShardIterator)
+str(records)
+```
+
+Let's parse these records:
+
+```r
+records$Records[[1]]
+records$Records[[1]]$Data
+
+library(jsonlite)
+fromJSON(as.character(records$Records[[1]]$Data))
+```
+
+### Parsing and structuring records read from the stream
+
+Exercises:
+
+* parse the loaded 25 records into a `data.table` object with proper column types. Get some help on the data format from the [Binance API docs](https://github.com/binance-exchange/binance-official-api-docs/blob/master/web-socket-streams.md#trade-streams)!
+* count the overall number of coins exchanged
+* count the overall value of transactions in USD (hint: `binance_ticker_all_prices()` and `binance_coins_prices()`)
+* visualize the distribution of symbol pairs
+
+<details><summary>A potential solution that you should not look at before thinking ...</summary>
+
+```shell
+library(data.table)
+dt <- rbindlist(lapply(records$Records, function(record) {
+  fromJSON(as.character(record$Data))
+}))
+
+str(dt)
+setnames(dt, 'a', 'seller_id')
+setnames(dt, 'b', 'buyer_id')
+setnames(dt, 'E', 'event_timestamp')
+## Unix timestamp / Epoch (number of seconds since Jan 1, 1970): https://www.epochconverter.com
+dt[, event_timestamp := as.POSIXct(event_timestamp / 1000, origin = '1970-01-01')]
+setnames(dt, 'q', 'quantity')
+setnames(dt, 'p', 'price')
+setnames(dt, 's', 'symbol')
+setnames(dt, 't', 'trade_id')
+setnames(dt, 'T', 'trade_timestamp')
+dt[, trade_timestamp := as.POSIXct(trade_timestamp / 1000, origin = '1970-01-01')]
+str(dt)
+
+for (id in grep('_id', names(dt), value = TRUE)) {
+  dt[, (id) := as.character(get(id))]  
+}
+str(dt)
+
+library(binancer)
+binance_coins_prices()
+
+dt[, .N, by = symbol]
+dt[symbol=='ETHUSDT']
+dt[, from := substr(symbol, 1, 3)]
+dt <- merge(dt, binance_coins_prices(), by.x = 'from', by.y = 'symbol', all.x = TRUE, all.y = FALSE)
+dt[, value := as.numeric(quantity) * usd]
+dt[, sum(value)]
+```
+</details>
+
+### Actual stream processing instead of analyzing batch data
+
+Let's write an R function to increment counters on the number of transactions per symbols:
+
+1. Get sample raw data as per above (you might need to get a new shard iterator if expired):
+
+   ```r
+   records <- kinesis_get_records(shard_iterator$ShardIterator)$Record
+   ```
+
+2. Function to parse and process it
+
+    ```r
+    txprocessor <- function(record) {
+      symbol <- fromJSON(as.character(record$Data))$s
+      log_info(paste('Found 1 transaction on', symbol))
+      redisIncr(paste('symbol', symbol, sep = ':'))
+    }
+    ```
+
+3. Iterate on all records
+
+    ```r
+    library(logger)
+    library(rredis)
+    redisConnect()
+    for (record in records) {
+      txprocessor(record)
+    }
+    ```
+
+4. Check counters
+
+    ```r
+    symbols <- redisMGet(redisKeys('symbol:*'))
+    symbols
+    
+    symbols <- data.frame(
+      symbol = sub('^symbol:', '', names(symbols)),
+      N = as.numeric(symbols))
+    symbols
+    ```
+
+5. Visualize
+
+    ```r
+    library(ggplot2)
+    ggplot(symbols, aes(symbol, N)) + geom_bar(stat = 'identity')
+    ```
+
+6. Rerun step (1) and (3) to do the data processing, then (4) and (5) for the updated data visualization.
+
+7. 🤦‍♂️
+
+8. Let's make use of the next shard iterator:
+
+    ```r
+    ## reset counters
+    redisDelete(redisKeys('symbol:*'))
+    
+    ## get the first shard iterator
+    shard_iterator <- kinesis_get_shard_iterator('crypt', '0')$ShardIterator
+    
+    while (TRUE) {
+    
+      response <- kinesis_get_records(shard_iterator)
+
+      ## get the next iterator
+      shard_iterator <- response$NextShardIterator
+
+      ## extract records
+      records <- response$Record
+      for (record in records) {
+        txprocessor(record)
+      }
+
+      ## summarize
+      symbols <- redisMGet(redisKeys('symbol:*'))
+      symbols <- data.frame(
+        symbol = sub('^symbol:', '', names(symbols)),
+        N = as.numeric(symbols))
+
+      ## visualize
+      print(ggplot(symbols, aes(symbol, N)) + geom_bar(stat = 'identity') + ggtitle(sum(symbols$N)))
+    }
+    ```
+
+### Stream processor daemon
+
+0. So far, we used the `boto3` Python module from R via `botor` to interact with AWS, but this time we will integrate Java -- by calling the AWS Java SDK to interact with our Kinesis stream, then later on to run a Java daemon to manage our stream processing application.
+
+    1. 💪 First, let's install Java and the `rJava` R package:
+
+    ```shell
+    sudo apt install r-cran-rjava
+    ```
+
+    2. 💪 Then the R package wrapping the AWS Java SDK and the Kinesis client, then update to the most recent dev version right away:
+
+    ```shell
+    sudo R -e "withr::with_libpaths(new = '/usr/local/lib/R/site-library', install.packages('AWR.Kinesis', repos='https://cran.rstudio.com/'))"
+    sudo R -e "library(devtools);with_libpaths(new = '/usr/local/lib/R/site-library', install_github('daroczig/AWR.Kinesis'))"
+    ```
+
+    3. 💪 Note, after installing Java, you might need to run `sudo R CMD javareconf` and/or restart R or the RStudio Server via `sudo rstudio-server restart` :/
+
+    ```shell
+    Error : .onLoad failed in loadNamespace() for 'rJava', details:
+      call: dyn.load(file, DLLpath = DLLpath, ...)
+      error: unable to load shared object '/usr/lib/R/site-library/rJava/libs/rJava.so':
+      libjvm.so: cannot open shared object file: No such file or directory
+    ```
+
+    4. And after all, a couple lines of R code to get some data from the stream via the Java SDK (just like we did above with the Python backend):
+
+    ```r
+    library(rJava)
+    library(AWR.Kinesis)
+    records <- kinesis_get_records('crypto', 'eu-west-1')
+    str(records)
+    records[1]
+
+    library(jsonlite)
+    fromJSON(records[1])
+    ```
+
+1. Create a new folder for the Kinesis consumer files: `streamer`
+
+2. Create an `app.properties` file within that subfolder
+
+```
+executableName = ./app.R
+regionName = eu-west-1
+streamName = crypto
+applicationName = my_demo_app_sadsadsa
+AWSCredentialsProvider = DefaultAWSCredentialsProviderChain
+```
+
+3. Create the `app.R` file:
+
+```r
+#!/usr/bin/Rscript
+library(logger)
+log_appender(appender_file('app.log'))
+library(AWR.Kinesis)
+library(methods)
+library(jsonlite)
+
+kinesis_consumer(
+
+    initialize = function() {
+        log_info('Hello')
+        library(rredis)
+        redisConnect(nodelay = FALSE)
+        log_info('Connected to Redis')
+    },
+
+    processRecords = function(records) {
+        log_info(paste('Received', nrow(records), 'records from Kinesis'))
+        for (record in records$data) {
+            symbol <- fromJSON(record)$s
+            log_info(paste('Found 1 transaction on', symbol))
+            redisIncr(paste('symbol', symbol, sep = ':'))
+        }
+    },
+
+    updater = list(
+        list(1/6, function() {
+            log_info('Checking overall counters')
+            symbols <- redisMGet(redisKeys('symbol:*'))
+            log_info(paste(sum(as.numeric(symbols)), 'records processed so far'))
+    })),
+
+    shutdown = function()
+        log_info('Bye'),
+
+    checkpointing = 1,
+    logfile = 'app.log')
+```
+
+4. 💪 Allow writing checkpointing data to DynamoDB and CloudWatch in IAM
+
+5. Convert the above R script into an executable using the Terminal:
+
+```shell
+cd streamer
+chmod +x app.R
+```
+
+6. Run the app in the Terminal:
+
+```
+/usr/bin/java -cp /usr/local/lib/R/site-library/AWR/java/*:/usr/local/lib/R/site-library/AWR.Kinesis/java/*:./ \
+    com.amazonaws.services.kinesis.multilang.MultiLangDaemon \
+    ./app.properties
+```
+
+7. Check on `app.log`
+
+### Shiny app showing the progress
+
+1. Reset counters
+
+    ```r
+    library(rredis)
+    redisConnect()
+    keys <- redisKeys('symbol*')
+    redisDelete(keys)
+    ```
+
+2. 💪 Install the `treemap` package
+
+    ```
+    sudo apt install r-cran-httpuv r-cran-shiny r-cran-xtable r-cran-htmltools r-cran-igraph r-cran-lubridate r-cran-tidyr r-cran-quantmod r-cran-broom r-cran-zoo r-cran-htmlwidgets r-cran-tidyselect r-cran-rlist r-cran-rlang r-cran-xml
+    sudo R -e "devtools::with_libpaths(new = '/usr/local/lib/R/site-library', install.packages(c('treemap', 'highcharter'), repos='https://cran.rstudio.com/'))"
+    ```
+
+3. Run the below Shiny app
+
+    ```r
+    ## packages for plotting
+    library(treemap)
+    library(highcharter)
+
+    ## connect to Redis
+    library(rredis)
+    redisConnect()
+
+    library(shiny)
+    library(data.table)
+    ui     <- shinyUI(highchartOutput('treemap', height = '800px'))
+    server <- shinyServer(function(input, output, session) {
+
+        symbols <- reactive({
+        
+            ## auto-update every 2 seconds
+            reactiveTimer(2000)()
+            
+            ## get frequencies
+            symbols <- redisMGet(redisKeys('symbol:*'))
+            symbols <- data.table(
+                symbol = sub('^symbol:', '', names(symbols)),
+                N = as.numeric(symbols))
+
+            ## color top 3
+            symbols[, color := 1]
+            symbols[symbol %in% symbols[order(-N)][1:3, symbol], color := 2]
+
+            ## return
+            symbols
+
+        })
+
+        output$treemap <- renderHighchart({
+            tm <- treemap(symbols(), index = c('symbol'),
+                          vSize = 'N', vColor = 'color',
+                          type = 'value', draw = FALSE)
+            N <- sum(symbols()$N)
+            hc_title(hctreemap(tm, animation = FALSE),
+            text = sprintf('Transactions (N=%s)', N))
+        })
+
+    })
+    shinyApp(ui = ui, server = server, options = list(port = 3838))
+    ```
+
+### Dockerizing R scripts
+
+Exercise: create a new GitHub repository with a `Dockerfile` installing `botor` (and its dependencies), `binancer` and `slackr` to be able to run the above jobs in a Docker container. Set up a DockerHub registry for the Docker image and start using in the Jenkins jobs.
+
+Hints:
+
+- create a new GitHub repo
+- create a new RStudio project using the git repo
+- set the default git user on the EC2 box
+
+    ```shell
+    git config --global user.email "you@example.com"
+    git config --global user.name "Your Name"
+    ```
+
+- create a Personal Access Token set up on GitHub for HTTPS auth on your EC2 box
+- example GitHub repo: https://github.com/daroczig/ceu-de3-docker-prep
+- example DockerHub repo: https://cloud.docker.com/repository/registry-1.docker.io/daroczig/ceu-de3-week5-prep
+- install Docker on EC2:
+
+    ```shell
+    sudo apt update
+    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    sudo add-apt-repository \
+      "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    sudo apt-get update
+    sudo apt-get install docker-ce
+    ```
+
+- example run:
+
+    ```shell
+    docker run --rm -ti daroczig/ceu-de3-week5-prep R -e "binancer::binance_klines('BTCUSDT', interval = '1m', limit = 1)[1, close]"
+    ```
+
+## Feedback
+
+We are continuously trying to improve the content of this class and looking forward to any feedback and suggestions: https://forms.gle/C5YDtJNxj7kTHjxU9
 
 ## Contact
 
